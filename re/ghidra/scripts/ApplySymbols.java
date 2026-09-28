@@ -17,6 +17,8 @@ public class ApplySymbols extends GhidraScript {
     }
 
     public void run() throws Exception {
+        name(0x40006d88L, "param_container_index", true);
+        name(0x40006f08L, "sound_param_id_for_index", true);
         name(0x4000704eL, "track_to_voice", true);
         name(0x40008a0eL, "pattern_track_load", true);
         name(0x40008baaL, "pattern_track_load_euclid_resume", false);
@@ -29,6 +31,10 @@ public class ApplySymbols extends GhidraScript {
         name(0x400376eaL, "param_apply_delta_track", false);
         name(0x400381a0L, "page_get_value", true);
         name(0x400381a8L, "page_get_value_body", false);
+        name(0x40039ae0L, "list_same_resume", false);
+        name(0x40039b48L, "list_new_resume", false);
+        name(0x4003a3d4L, "knob_cidx_resume", false);
+        name(0x4004a578L, "dest_list_build_resume", false);
         name(0x4006e1caL, "bitmap_ctor", true);
         name(0x40076c14L, "view_invalidate", true);
         name(0x4008022eL, "is_key_held", true);
@@ -36,15 +42,21 @@ public class ApplySymbols extends GhidraScript {
         name(0x40098ae6L, "trig_fire_euclid_flag_resume", false);
         name(0x40098ba0L, "trig_fire_flags_join", false);
         name(0x40098fbaL, "trig_fire_vel_resume", false);
+        name(0x4009901cL, "trig_fire_cfg_resume", false);
+        name(0x4009c7a4L, "lfo_block", true);
         name(0x400a3d08L, "kit_track_sound", true);
+        name(0x400a5884L, "param_knob_draw_body", false);
         name(0x400a58f8L, "param_value_text", true);
         name(0x400a5900L, "param_value_text_resume", false);
         name(0x400a5908L, "param_value_text_body", false);
         name(0x400a5910L, "param_value_text_args", false);
         name(0x400a5aceL, "getbyid_vel_jsr", false);
         name(0x400a5b64L, "getbyid_boolop_jsr", false);
+        name(0x400a611aL, "param_set_read_body", false);
         name(0x400a62b4L, "param_short_name_body", false);
+        name(0x400a631eL, "param_set_value_body", false);
         name(0x400a6fc0L, "setbyid_boolop_jsr", false);
+        name(0x400a752aL, "dest_list_build", true);
         name(0x400ac2e8L, "current_track_pattern", true);
         name(0x400b3a04L, "track_index_of", true);
         name(0x400bcdb4L, "vel_get_stock", true);
@@ -61,14 +73,18 @@ public class ApplySymbols extends GhidraScript {
         name(0x400c0caaL, "euclid_bake_body", false);
         name(0x400c71d2L, "filter_view_page_count", false);
         name(0x400c71d8L, "filter_view_page_list", false);
+        name(0x400c727aL, "lfo_view_page_count", false);
+        name(0x400c7280L, "lfo_view_page_list", false);
         name(0x400f859cL, "euclid_bool_op_format", true);
         name(0x400f8634L, "boolop_icon_draw", true);
         name(0x400f8718L, "param_info", true);
         name(0x400f8722L, "param_info_resume", false);
         name(0x400f8736L, "page_info", true);
         name(0x400f873cL, "page_info_resume", false);
+        name(0x400f8e0aL, "lfo_dst_knob_draw", true);
         name(0x4010795eL, "voice_out", true);
         name(0x401189e8L, "voice_out_call_a", false);
+        name(0x40119b18L, "lfo_call_resume", false);
         name(0x40119d8aL, "voice_out_call_b", false);
         name(0x4011cbe2L, "boolop_iconset_jsr", false);
         name(0x4013d9d8L, "param_text_format", true);
@@ -86,6 +102,8 @@ public class ApplySymbols extends GhidraScript {
         name(0x416a6aa4L, "PARAM_INFO_BASE", false);
         name(0x416c6d90L, "boolop_icon_set", false);
         name(0x416c70c0L, "project_instance", false);
-        println("applied 69 symbols");
+        name(0x800062c0L, "PARAMS_EFF", false);
+        name(0x8000a9e8L, "TRIG_FLAGS", false);
+        println("applied 87 symbols");
     }
 }

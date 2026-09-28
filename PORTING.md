@@ -11,7 +11,7 @@ sha256 9115c388...157c).
 | 0000 shared runtime | **built, verified in software** | 6 symbols, all found and checked |
 | 0002 euclid accents | **built, verified in software** | 31 symbols + 10 detours + 11 patches, all found; glyph code rewritten for the MK1's 13 x 11 icons |
 | 0003 velocity humanise | **built, verified in software** | 4 detours + 1 patch, all found |
-| 0004 LFO RND | not ported, disabled | see below |
+| 0004 LFO RND | **built, verified in software** | RANDOM build (excludes 0008); see below |
 | 0006 compressor preview | not ported, disabled | not wanted |
 | 0008 SMP CUT (new) | **built, verified in software** | written for MK1; see below |
 
@@ -97,19 +97,44 @@ To check on hardware: the page and knobs, that the sound changes as expected on 
 sample track, that the settings survive save + power cycle, and whether the UI
 stays responsive with many filters on.
 
-## What 0004 and 0006 still need
+## 0004 LFO RND - how it was ported
 
-**0004 LFO RND** (28 symbols, 14 detours, 18 patches, two RAM addresses in SRAM):
-- detours in the page/LFO code at MKII 0x40038462, 0x40039d32/d9a, 0x4003a5f2,
-  0x4003ab94, 0x4004aec6, 0x400a857c, 0x400a8dfa, 0x400a9000, 0x400ff574, 0x40120fae,
-  0x4009b000 - most sit in regions already anchored above;
-- 16 patches in the parameter-descriptor table (MKII 0x401bf9xx; MK1 table base
-  0x4018e004 found, its per-id layout still to confirm);
-- the audio-interrupt side: SRAM 0x8000e508 / 0x8000f7a8 on MKII, to be re-found;
-- space: 1.4 KB, which does not fit what is left. Needs MK1 twins of the MKII
-  dead-code pools (cave4..6) - or the loader route below, which removes the problem;
-- UI: the page is built from stock page machinery, but its knob art assumes the
-  MKII screen. Needs a look on a real MK1 screen.
+Done with the MKII stock image (`Analog-Rytm_MKII_OS1.73.syx`, sha256 8ad67108...,
+MAIN OS 28d9ef40...). Both MAIN OS images were disassembled, and `tools/xmatch.py`
+matched every MKII address the mod uses to its MK1 twin by voting over normalised
+instruction windows; each result was then read side by side, and an independent
+review pass re-checked every site, expect string, frame offset and RAM address.
+
+- 12 detours (MKII had 14 - see the title hook below), 24 patches, 22 symbols;
+  all in `re/symbols.toml` with the MKII address and the evidence.
+- The 469 ROM parameter records are identical on both (kind, container index,
+  range, modflags, names), so the sixteen destinations and ids 1..4 carry over.
+- RAM: the trig flags are at 0x8000a9e8 (MKII 0x8000e508) and the effective
+  parameter array at 0x800062c0 (MKII 0x8000f7a8); stride 0x54 on both.
+
+Differences from MKII:
+
+- **No title hook.** MKII's page view pushes a header title on activate, and the
+  mod re-pushed it after the page key's cycle. MK1's page_view_activate
+  (0x400376ae) pushes none, so that detour is dropped.
+- **param_knob_draw** saves one more register on MK1 and reads two more argument
+  slots; x/y/h are where MKII has them, so only the re-emitted prologue changes.
+- **Page 11**, not 12, and page_info's displaced compare is `moveq #10`.
+- **Space**: code in `cave` (1092 of 1232 B), data, strings and state in `cave3`
+  (221 of 1024 B) - the two pools 0008 uses, free because the two exclude each other.
+- **The destination list** is 73 px wide at x = 49 on MK1; the mod moves it to x = 0.
+
+**Why two builds.** 0004 and 0008 both keep their settings in sound index 0, the
+one 16-bit word per sound that the stock OS saves, loads, copies and undoes by
+itself (MKII project, `re/subsystems/lfo.md` Q8/Q9), and each needs all 16 bits.
+The other spare storage (slots 42..47) is zeroed by every stock save and has no
+place in the live sound. So the default build keeps SMP CUT and `make random`
+builds LFO RND instead.
+
+To check on hardware: as MKII's design.md, plus that the list sits on the left
+of the MK1 screen and that "LFO RND" fits where the MK1 prints page names.
+
+## What 0006 still needs
 
 **0006 compressor preview**: the hardest by far. 3.8 KB, a model calibrated against
 the MKII's analog compressor path and USB audio, SRAM audio-engine addresses, and a
@@ -118,10 +143,10 @@ screen, different analog board) the drawing must be redesigned and the model
 re-calibrated with the MK1's own USB/Overbridge captures. Treat as a new mod that
 reuses the MKII design, not a port.
 
-**Much faster with the MKII stock file.** Everything above was located from the MKII
-project's notes and detour bytes alone. With `Analog-Rytm_MKII_OS1.73.syx`
-(the manufacturer's free download) in the folder, the two images can be matched function by
-function automatically, which turns 0004's ~60 addresses into a checked table.
+**Porting more MKII work.** 0002/0003 were located from the MKII project's notes and
+detour bytes alone; 0004 with the MKII stock `.syx` (the manufacturer's free
+download) and `tools/xmatch.py`, which matches the two images function by function.
+Use the latter for anything further - it is much faster and leaves evidence.
 
 ## Would a loader be feasible? Yes - two stages
 
@@ -144,5 +169,5 @@ function automatically, which turns 0004's ~60 addresses into a checked table.
    - the mods rewritten as linkable `.elemod`s.
 
    The payoff on the MK1 is bigger than on the Digitakt: the loader copies mod code
-   into free DDR at boot, so the cave shortage that blocks 0004 and 0006 disappears,
+   into free DDR at boot, so the cave shortage that blocks 0006 disappears,
    and mods combine with the Digitakt-style tooling you already use.

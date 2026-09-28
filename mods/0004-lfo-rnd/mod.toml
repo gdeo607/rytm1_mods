@@ -2,7 +2,12 @@
 id      = "0004-lfo-rnd"
 title   = "Two per-sound random modifiers on a second LFO page"
 
-enabled = false   # MK1: not ported yet - see PORTING.md
+# Off in the default build, which carries 0008 SMP CUT instead: the two keep their
+# settings in the same free sound word and exclude each other. The RANDOM build is
+# `make random` (0000 0002 0003 0004).
+enabled = false
+
+excludes = ["0008-sample-cut"]
 
 # re-only | built | hardware-verified | retracted
 status  = "built"
@@ -31,10 +36,10 @@ stub = "stub.s"
 
 [params]
 # 1 = page, editing, dial, popup and storage only. 2 adds the trig_fire and audio
-# hooks that apply the modifiers. Both phases have run on hardware.
+# hooks that apply the modifiers. Both phases have run on MKII hardware; neither on MK1.
 phase = 2
 # 1 = DS1/DS2 open stock's LFO DST list, restricted to the sixteen, on the left of
-# the screen, committing on YES. On hardware 2026-09-20. 0 drops the four detours and
+# the screen, committing on YES. On MKII hardware 2026-09-20. 0 drops the four detours and
 # the two modflag patches that route the knobs there; the knob still shows the
 # destination's name either way.
 dest_list = 1
@@ -47,10 +52,6 @@ symbols = [
   "param_apply_delta_track",
   "param_value_text_args",
   "sound_param_id_for_index",
-  "std_string_from_cstr",
-  "ui_set_title",
-  "std_string_dtor",
-  "page_cycle_after_invalidate",
   "trig_fire_cfg_resume",
   "lfo_block",
   "lfo_call_resume",
@@ -61,4 +62,11 @@ symbols = [
   "dest_list_build_resume",
   "param_set_read_body",
   "lfo_dst_knob_draw",
+  "list_same_resume",
+  "list_new_resume",
+  "knob_cidx_resume",
+  "view_invalidate",
+  "TRIG_FLAGS",
+  "PARAMS_EFF",
+  "PARAM_ROM",
 ]

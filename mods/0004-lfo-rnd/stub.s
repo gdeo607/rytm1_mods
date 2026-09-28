@@ -1,6 +1,17 @@
         | Mod 0004 - LFO RND. Phase 1: page, editing, dial, popup, storage.
         | Phase 2: the modifiers are applied.
         |
+        | MK1 port of the MKII project's mod. What changed, and why:
+        | - the page is 11 (MK1 pages are 0..10) and page_info's displaced
+        |   compare is moveq #10;
+        | - no title hook: the MK1's page view pushes no header title
+        |   (page_view_activate 0x400376ae has no ui_set_title), so the MKII
+        |   title_after_cycle detour has nothing to fix;
+        | - param_knob_draw takes two more arguments on MK1 and saves one more
+        |   register, so knob_draw_gate re-emits a different prologue;
+        | - every address comes from symbols.inc (re/symbols.toml, MK1).
+        | It cannot share an image with 0008 SMP CUT: both use sound index 0.
+        |
         | The four settings live in the sound's parameter word at sound index 0
         | (live sound +0x14, storage slot 41), which no stock parameter uses:
         |
@@ -15,19 +26,18 @@
         .include "symbols.inc"
         .include "shared.inc"
 
-        .equ    PAGE_RND,       12
+        .equ    PAGE_RND,       11                | MK1 pages are 0..10
         .equ    PAGE_LFO,       3
         .equ    ID_FIRST,       1
         .equ    OFF_PARAMS,     0x14              | live sound parameter array
         .equ    OFF_MACHINE,    0x68              | live sound machine byte
-        .equ    PARAM_ROM,      0x401bf918        | 0x34-byte ROM parameter records
         .equ    PARAM_ROM_SHORT, 0x30
         .equ    LIST_X,         184               | the list view's x; +188 is its width
 
         .text
 
         | ------------------------------------------------------------------
-        | page_info, answering page 12.
+        | page_info, answering page 11.
         |
         | Entered by a jmp at the entry, so (%sp) is the return address and
         | 4(%sp) the page id. Returns the descriptor in d0, as stock does.
@@ -40,48 +50,9 @@ page_info_gate:
         lea     page_rnd,%a0
         move.l  %a0,%d0
         rts
-1:      moveq   #11,%d1                           | displaced
+1:      moveq   #10,%d1                           | displaced
         move.l  %sp@(4),%d0                       | displaced
         jmp     page_info_resume
-
-        | ------------------------------------------------------------------
-        | The page key's cycle, then the header title.
-        |
-        | page_view_activate pushes the title once, before the key handler cycles
-        | to the next page, so the header lagged one page. Reached by a jmp over
-        | `movel %a2,%sp@-; jsr 0x40078514` right after the cycle; a2 is the view.
-        | Re-emits both - the pushed view stays for stock's addql #8 - then pushes
-        | the new page's title exactly as page_view_activate does.
-        | ------------------------------------------------------------------
-        .equ    VT_TITLE,       0x4c
-        .equ    VIEW_UI,        108
-
-        .align  2
-title_after_cycle:
-        move.l  %a2,-(%sp)                        | displaced
-        jsr     0x40078514                        | displaced
-        lea     -24(%sp),%sp
-        movem.l %d0-%d1/%a0-%a1,(%sp)             | string at 20(sp), alloc byte at 19(sp)
-        move.l  %a2,-(%sp)
-        move.l  (%a2),%a0
-        move.l  VT_TITLE(%a0),%a0
-        jsr     (%a0)                             | d0 = title
-        addq.l  #4,%sp
-        pea     19(%sp)                           | allocator
-        move.l  %d0,-(%sp)                        | c string
-        pea     28(%sp)                           | &string
-        jsr     std_string_from_cstr
-        lea     12(%sp),%sp
-        pea     20(%sp)                           | &string
-        move.l  VIEW_UI(%a2),-(%sp)
-        jsr     ui_set_title
-        addq.l  #8,%sp
-        pea     20(%sp)
-        jsr     std_string_dtor
-        addq.l  #4,%sp
-        movem.l (%sp),%d0-%d1/%a0-%a1
-        lea     24(%sp),%sp
-        jmp     page_cycle_after_invalidate
 
         | ------------------------------------------------------------------
         | field_of(d0 = parameter id) -> d0 = field 0..3, or C set if not ours
@@ -173,7 +144,6 @@ get_gate:
         | The write bypasses stock's setter, and with it whatever makes the page
         | redraw at once, so the view is invalidated here after each change.
         | ------------------------------------------------------------------
-        .equ    VIEW_INVALIDATE, 0x40078514
         .align  2
 delta_gate:
         move.l  %sp@(20),%d0
@@ -202,7 +172,7 @@ delta_gate:
         move.l  %sp@(24),-(%sp)                   | the id
         jsr     shared_mark_changed
         move.l  %a2,(%sp)                         | the view
-        jsr     VIEW_INVALIDATE                   | redraw now, not on the next refresh
+        jsr     view_invalidate                   | redraw now, not on the next refresh
         addq.l  #8,%sp
 7:      movem.l (%sp),%d2-%d3/%a2                 | param_apply_delta's epilogue
         lea     12(%sp),%sp
@@ -296,11 +266,16 @@ dst_name:
         | shuffled into the frame param_knob_draw would have built for a callback and
         | the call is handed to lfo_dst_knob_draw.
         |
-        | That frame is (functor, value, x, y, h, 1), written over our own argument
-        | slots in place, exactly as param_knob_draw does at 0x400a85a8. The functor
-        | slot keeps whatever it held: the invoker reads the value at its +8 and the
-        | three at +12/+16/+20 and nothing else - checked instruction by instruction -
-        | so it never looks at it.
+        | That frame is (functor, value, x, y, h, flag), written over our own argument
+        | slots in place, as param_knob_draw does at 0x400a58be. The functor slot
+        | keeps whatever it held: the invoker reads the value at its +8 and the three
+        | at +12/+16/+20 and nothing else - checked instruction by instruction on the
+        | MK1's 0x400f8e0a - so it never looks at it, nor at the flag.
+        |
+        | MK1: param_knob_draw reads two arguments MKII's leaves alone (a flag byte
+        | at +16 and a pointer at +20, for the callback's last slot), but x, y and h
+        | sit at +24/+28/+32 as on MKII, so the shuffle is the MKII one. Its prologue saves d2-d6/a2
+        | in 24 bytes, which is what 9: re-emits.
         | ------------------------------------------------------------------
         .align  2
 knob_draw_gate:
@@ -317,8 +292,8 @@ knob_draw_gate:
         moveq   #1,%d0
         move.l  %d0,24(%sp)
         jmp     lfo_dst_knob_draw
-9:      lea     %sp@(-16),%sp                     | displaced
-        moveml  %d2-%d5,%sp@                      | displaced
+9:      lea     %sp@(-24),%sp                     | displaced
+        moveml  %d2-%d6/%a2,%sp@                  | displaced
         jmp     param_knob_draw_body
 
         | ------------------------------------------------------------------
@@ -446,14 +421,14 @@ setter_gate:
         | the vector, whose +0 and +4 are begin and end.
         |
         | Two things have to match. The mask at %fp@(32) is 0x600 for the LFO DST list
-        | and 0x200 for MOD SETUP's, which the same constructor builds at 0x4004bab8;
+        | and 0x200 for MOD SETUP's, which the same constructor builds at 0x4004b09c;
         | and the index is 0, the sound's free word, which no stock parameter uses -
         | LFO DST's own is 4. MOD SETUP passes its route slot in that argument, and
         | slot 0 would otherwise look exactly like ours.
         |
         | The panel is moved to the left edge here too. Its geometry reached the view
-        | before this point - x at +184, width at +188 - and stock's 49 + 79 puts it
-        | flush right. Only the x moves, so it keeps stock's width.
+        | before this point - x at +184, width at +188; on MK1 stock places it at
+        | x = 49, width 73. Only the x moves, so it keeps stock's width.
         |
         | Stock builds every modulation destination the sound
         | has; for our two ids the entries outside dst_indices are dropped by
@@ -500,7 +475,7 @@ list_filter_gate:
         | ------------------------------------------------------------------
         | The picker's test for whether the open list is this knob's.
         |
-        | Reached by a jmp over `jsr param_container_index` at 0x40039d32, with
+        | Reached by a jmp over `jsr param_container_index` at 0x40039ada, with
         | the id at (%sp). Stock keeps the open list when its container index
         | matches the knob's, and cancels it and opens the knob's own otherwise.
         | DS1 and DS2 share index 0, so turning one with the other's list up
@@ -508,7 +483,6 @@ list_filter_gate:
         | The list does not record its parameter, so list_new_gate keeps it in
         | list_owner; one of ours that does not own the list answers -1.
         | ------------------------------------------------------------------
-        .equ    LIST_SAME_RESUME, 0x40039d38
         .align  2
 list_same_gate:
         jsr     param_container_index             | displaced
@@ -518,7 +492,7 @@ list_same_gate:
         cmp.b   list_owner,%d1
         beq.s   9f
         moveq   #-1,%d0
-9:      jmp     LIST_SAME_RESUME
+9:      jmp     list_same_resume
 
 list_owner:                                       | the id the open list is for
         .byte   0
@@ -528,16 +502,14 @@ list_owner:                                       | the id the open list is for
         |
         | Reached by a jmp over `jsr param_container_index` in the page view key
         | handler's knob-event path, with the id at (%sp) and in d4. The result is
-        | kept at %fp@(-20) and read only by the release, at 0x4003aa1e: a list
+        | kept at %fp@(-20) and read only by the release, at 0x4003a7fa: a list
         | whose container index matches the released knob's is confirmed, any
         | other is cancelled. The four settings share container index 0, so
         | releasing DP1 or DP2 confirmed the DS list its own press had just
         | cancelled, and the list came back up for a moment. The depths answer
         | -1 here, which no list holds, so their release cancels as any other
-        | knob's does. In its own section: cave2 has no room left for it.
+        | knob's does.
         | ------------------------------------------------------------------
-        .equ    KNOB_CIDX_RESUME, 0x4003a5f8
-        .section .kgate,"ax"
         .align  2
 knob_cidx_gate:
         jsr     param_container_index             | displaced
@@ -548,21 +520,19 @@ knob_cidx_gate:
         cmp.l   %d4,%d1
         bne.s   9f
 1:      moveq   #-1,%d0
-9:      jmp     KNOB_CIDX_RESUME
+9:      jmp     knob_cidx_resume
 
         | ------------------------------------------------------------------
         | The picker, creating a list: record whose it is, for list_same_gate.
-        | Reached by a jmp over `jsr param_container_index` at 0x40039d9a, with
+        | Reached by a jmp over `jsr param_container_index` at 0x40039b42, with
         | the id at (%sp).
         | ------------------------------------------------------------------
-        .equ    LIST_NEW_RESUME, 0x40039da0
         .align  2
 list_new_gate:
         move.l  (%sp),%d1                         | the id
         move.b  %d1,list_owner
         jsr     param_container_index             | displaced
-        jmp     LIST_NEW_RESUME
-        .text
+        jmp     list_new_resume
         .endif
 
         .if     P_PHASE >= 2
@@ -578,8 +548,6 @@ list_new_gate:
         | ==================================================================
         .equ    VOICE_TRACKS,   12
         .equ    TF_TRACK,       92                | trig_fire's track, from its frame
-        .equ    TRIG_FLAGS,     0x8000e508        | per-track long, 1 on a note this block
-        .equ    PARAMS_EFF,     0x8000f7a8        | effective array, track 0 index 0
         .equ    TRACK_STRIDE,   0x54
         .equ    PARAM_MAX,      0x7fff            | the LFO's clamp
 
@@ -618,7 +586,7 @@ trig_cfg_gate:
         | ------------------------------------------------------------------
         | The audio interrupt's LFO call, with the modifiers first.
         |
-        | Reached by a jmp over `jsr 0x4009e790`, with the LFO's argument at
+        | Reached by a jmp over `jsr lfo_block` (0x40119b12), with the LFO's argument at
         | (%sp). Per voice track: on a note this block, draw both offsets from
         | cfg; then add the held offsets to their destinations, clamped to
         | 0..PARAM_MAX. Then call the LFO exactly as stock does.
@@ -703,8 +671,9 @@ audio_gate:
         .endif
 
         | ------------------------------------------------------------------
-        | Data
+        | Data, in cave3 (MK1: the code alone fills most of `cave`)
         | ------------------------------------------------------------------
+        .section .tab,"aw"
         .align  2
 lfo_pages:                                        | the voice LFO view's pages
         .long   PAGE_LFO, PAGE_RND

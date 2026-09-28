@@ -2,7 +2,7 @@
 # Build and verify use only the Python standard library; python3 >= 3.11.
 PY := python3
 
-.PHONY: all setup symbols layout build verify control disasm clean
+.PHONY: all setup symbols layout build verify random control disasm clean
 
 all: verify
 
@@ -34,6 +34,13 @@ build: symbols layout
 
 verify: build
 	$(PY) tools/verify.py $(if $(TAG),--tag $(TAG),)
+
+# The RANDOM build: 0004 LFO RND in place of 0008 SMP CUT (the two share the sound's
+# one free word, so they are never in one image).
+RANDOM_MODS := 0000-shared 0002-euclid-accents 0003-velocity-humanise 0004-lfo-rnd
+random: symbols layout
+	$(PY) tools/build.py --mods $(RANDOM_MODS) --tag 0000_0002_0003_0004
+	$(PY) tools/verify.py --tag 0000_0002_0003_0004
 
 # The pipeline test: no mods at all, stock MAIN OS recompressed by our tool.
 control: symbols layout

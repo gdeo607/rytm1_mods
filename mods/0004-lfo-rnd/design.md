@@ -1,5 +1,10 @@
 # 0004 LFO RND - status and outstanding work
 
+> **MK1.** This is the MKII project's design note, kept as written; "on hardware"
+> below means MKII hardware. The MK1 port (RANDOM build, page 11, no title hook,
+> MK1 knob-draw prologue, code in `cave` and data in `cave3`) is described in
+> PORTING.md; nothing of it has run on an MK1 yet.
+
 ## What exists
 
 A second LFO page, LFO RND, reached by pressing the LFO page key again. Two random

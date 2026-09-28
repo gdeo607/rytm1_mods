@@ -159,13 +159,19 @@ def validate(reg: dict, enabled: set[str] | None = None, params: dict | None = N
             )
 
     detours = [d for d in reg.get("detour", []) if active(d)]
+    # Mutually exclusive mods are never in one image, so they may patch the same bytes
+    # (0004 and 0008 both rename the dead parameter records 1..2).
     for i, a in enumerate(patches):
         for b in patches[i + 1:]:
+            if exclusive(a, b):
+                continue
             if _overlaps(a["addr"], a["size"], b["addr"], b["size"]):
                 errors.append(
                     f"patch: {a['owner']} and {b['owner']} both claim 0x{a['addr']:08x}"
                 )
         for b in detours:
+            if exclusive(a, b):
+                continue
             if _overlaps(a["addr"], a["size"], b["addr"], b["size"]):
                 errors.append(
                     f"patch by {a['owner']} at 0x{a['addr']:08x} overlaps detour by "

@@ -483,3 +483,327 @@ size        = 4
 expect      = "401ff21d"   # id 2: short name, was "ERR"
 from_symbol = "str_hc"
 
+
+# ------------------------------------------------------- 0004-lfo-rnd
+#
+# The RANDOM build's mod. It excludes 0008 (same free sound word), so it takes the
+# two pools 0008 uses in the default build: code in `cave`, data and state in `cave3`.
+
+[[cave]]
+owner   = "0004-lfo-rnd"
+addr    = 0x402a1b30
+size    = 0x460
+section = ".text"
+note    = "The LFO RND gates: page_info / get / delta / text / knob draw, the destination list's filter, read, commit and knob tests, the trig_fire copy and the audio-interrupt modifiers. MKII: 0x402cd8a0 in cave2 (+48 B of cave4)."
+
+[[cave]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4024db0c
+size    = 0x100
+section = ".tab"
+note    = "The page list and descriptor, the sixteen destinations, the strings, the RNG state and the per-track settings and held offsets written by the interrupts."
+
+# The voice LFO view's page list: {3} becomes {3, 11}. Pressing LFO again then
+# cycles to page 11 through the view's own multi-page handling.
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x400c727a
+size    = 2
+expect  = "7201"           # moveq #1,%d1 - page count
+replace = "7202"
+mk2     = 0x400cb02a
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr        = 0x400c7280
+size        = 4
+expect      = "401af514"   # the one-entry list holding page 3
+from_symbol = "lfo_pages"
+mk2         = 0x400cb030
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x400f8736
+size    = 6
+expect  = "720a202f0004"
+entry   = "page_info_gate"
+mk2     = 0x400ff574
+note    = "page_info answers page 11 from the cave; every other id goes to stock (moveq #10 displaced)."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x400381a0
+size    = 6
+expect  = "4feffff448d7040c"
+entry   = "get_gate"
+mk2     = 0x40038462
+note    = "The dials: page_get_value's entry, for ids 1..4."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x400376e4
+size    = 6
+expect  = "77832f2a0074"
+entry   = "delta_gate"
+mk2     = 0x400378b6
+note    = "The knobs: param_apply_delta past its prologue, where 0003's gate rejoins."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x400a5908
+size    = 6
+expect  = "242f0020262f0024"
+entry   = "text_gate"
+mk2     = 0x400a85f0
+note    = "The popup text: param_value_text past its argument loads, where 0003's gate rejoins."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x400a587c
+size    = 6
+expect  = "4fefffe848d7047c"
+entry   = "knob_draw_gate"
+mk2     = 0x400a857c
+note    = "The knob draw for the two destination knobs: handed to stock's LFO DST callback. MK1's prologue differs from MKII's (lea -24; moveml d2-d6/a2); both instructions are re-emitted."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4004a572
+size    = 6
+expect  = "4eb9400a752a"
+entry   = "list_filter_gate"
+gate    = "dest_list"
+mk2     = 0x4004aec6
+note    = "The destination list's contents: the jsr dest_list_build in the list view constructor. The addql #8 after it is where the stub rejoins and is NOT re-emitted."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4003a3ce
+size    = 6
+expect  = "4eb940006d88"
+entry   = "knob_cidx_gate"
+gate    = "dest_list"
+mk2     = 0x4003a5f2
+note    = "The knob-release list test: the container index the key handler keeps for the knob, for ids 2 and 4."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x40039ada
+size    = 6
+expect  = "4eb940006d88"
+entry   = "list_same_gate"
+gate    = "dest_list"
+mk2     = 0x40039d32
+note    = "The picker's is-this-the-knob's-list test."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x40039b42
+size    = 6
+expect  = "4eb940006d88"
+entry   = "list_new_gate"
+gate    = "dest_list"
+mk2     = 0x40039d9a
+note    = "The picker creating a list: records whose it is."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x400a6112
+size    = 6
+expect  = "4feffff048d74404"
+entry   = "read_gate"
+gate    = "dest_list"
+mk2     = 0x400a8dfa
+note    = "What the picker reads: param_set_read's entry, for ids 1..4."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x400a6316
+size    = 6
+expect  = "4fefffd848d704fc"
+entry   = "setter_gate"
+gate    = "dest_list"
+mk2     = 0x400a9000
+note    = "The list's commit: param_set_value's entry, for ids 1..4."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x40099014
+size    = 6
+expect  = "2945000c29400018"
+entry   = "trig_cfg_gate"
+gate    = "phase==2"
+mk2     = 0x4009b000
+note    = "trig_fire just after the event is marked valid: copy the track's settings word."
+
+[[detour]]
+owner   = "0004-lfo-rnd"
+addr    = 0x40119b12
+size    = 6
+expect  = "4eb94009c7a4"
+entry   = "audio_gate"
+gate    = "phase==2"
+mk2     = 0x40120fae
+note    = "The audio interrupt's LFO call: redraw on note, add the held offsets, then call the LFO as stock does."
+
+# Ids 1 and 3 get LFO DST's modflag (0x10000 at +0x24), so the knob handler routes
+# them to the destination list exactly as it routes DST (the test at 0x40039d62).
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e05c
+size    = 4
+gate    = "dest_list"
+expect  = "00000000"       # id 1: modflags
+replace = "00010000"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0c4
+size    = 4
+gate    = "dest_list"
+expect  = "00000000"       # id 3: modflags
+replace = "00010000"
+
+# Parameter ids 1..4, dead Error records, become the four settings: container index
+# 0 (the sound's free word), range 0..0x7f00, and new names.
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e03c
+size    = 4
+expect  = "ffffffff"       # id 1: container index
+replace = "00000000"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e044
+size    = 4
+expect  = "00000000"       # id 1: max
+replace = "00007f00"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e060
+size    = 4
+expect  = "40208914"       # id 1: long name, was "Error"
+from_symbol = "str_r1dst_l"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e064
+size    = 4
+expect  = "40208b80"       # id 1: group name, was ""
+from_symbol = "str_group"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e068
+size    = 4
+expect  = "401ff21d"       # id 1: short name, was "ERR"
+from_symbol = "str_r1dst"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e070
+size    = 4
+expect  = "ffffffff"       # id 2: container index
+replace = "00000000"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e078
+size    = 4
+expect  = "00000000"       # id 2: max
+replace = "00007f00"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e094
+size    = 4
+expect  = "40208914"       # id 2: long name, was "Error"
+from_symbol = "str_r1dep_l"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e098
+size    = 4
+expect  = "40208b80"       # id 2: group name, was ""
+from_symbol = "str_group"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e09c
+size    = 4
+expect  = "401ff21d"       # id 2: short name, was "ERR"
+from_symbol = "str_r1dep"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0a4
+size    = 4
+expect  = "ffffffff"       # id 3: container index
+replace = "00000000"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0ac
+size    = 4
+expect  = "00000000"       # id 3: max
+replace = "00007f00"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0c8
+size    = 4
+expect  = "40208914"       # id 3: long name, was "Error"
+from_symbol = "str_r2dst_l"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0cc
+size    = 4
+expect  = "40208b80"       # id 3: group name, was ""
+from_symbol = "str_group"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0d0
+size    = 4
+expect  = "401ff21d"       # id 3: short name, was "ERR"
+from_symbol = "str_r2dst"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0d8
+size    = 4
+expect  = "ffffffff"       # id 4: container index
+replace = "00000000"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0e0
+size    = 4
+expect  = "00000000"       # id 4: max
+replace = "00007f00"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e0fc
+size    = 4
+expect  = "40208914"       # id 4: long name, was "Error"
+from_symbol = "str_r2dep_l"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e100
+size    = 4
+expect  = "40208b80"       # id 4: group name, was ""
+from_symbol = "str_group"
+
+[[patch]]
+owner   = "0004-lfo-rnd"
+addr    = 0x4018e104
+size    = 4
+expect  = "401ff21d"       # id 4: short name, was "ERR"
+from_symbol = "str_r2dep"

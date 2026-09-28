@@ -467,3 +467,117 @@ evidence = "project_singleton tests it, stores the new project there and returns
 addr = 0x401737a2
 status = "verified"
 evidence = "Slot 0x28 of Sound's vtable (0x401adc34; typeinfo 5Sound 0x401ad924): return this->+16 - the live sound the kit accessor hands out. Its setter (0x401737be) repoints +16 and notifies, so the pointer is read fresh each time rather than cached."
+
+# ------------------------------------------------------------------ 0004 LFO RND
+# Located with the MKII 1.73 image (Analog-Rytm_MKII_OS1.73.syx, sha256 8ad67108...):
+# both MAIN OS images disassembled, instruction windows normalised (absolute addresses
+# masked) and matched MKII -> MK1 by k-gram vote; every entry below was then read
+# side by side. The matcher is tools/xmatch.py.
+
+[fn.sound_param_id_for_index]
+addr = 0x40006f08
+mk2 = 0x40007028
+status = "verified"
+evidence = "Identical body (moveq #41 bound, machine table for indices 9..16). 48/48 k-gram votes."
+
+[fn.param_container_index]
+addr = 0x40006d88
+mk2 = 0x40006ea8
+status = "verified"
+evidence = "The one ROM-record accessor returning +4 (movel %a0@(4,%d0:l),%d0) behind the #469 clamp. Its 33 callers include the three picker sites below, each matched instruction for instruction."
+
+[data.trig_fire_cfg_resume]
+addr = 0x4009901c
+mk2 = 0x4009b008
+status = "verified"
+evidence = "trig_fire after movel %d5,%a4@(12); movel %d0,%a4@(24) (0x40099014). trig_fire's prologue is identical (lea -88, moveml 44 B), so the track is at %sp@(92) here as on MKII."
+
+[fn.lfo_block]
+addr = 0x4009c7a4
+mk2 = 0x4009e790
+status = "verified"
+evidence = "Identical LFO block: lea 0x8000a9e8 (trig flags), a3 = 0x800050b8 with the per-track LFO fields at a3 + 4616 + 2..16 (MKII 0x8000e57c + 4652), a3 += 84 per track."
+
+[data.lfo_call_resume]
+addr = 0x40119b18
+mk2 = 0x40120fb4
+status = "verified"
+evidence = "The audio interrupt's only call of lfo_block is the jsr at 0x40119b12 (after movel 0x4024be34,%sp@-); this is the addql #4,%sp after it."
+
+[data.TRIG_FLAGS]
+addr = 0x8000a9e8
+mk2 = 0x8000e508
+status = "verified"
+evidence = "lfo_block's first lea (MKII 0x8000e508 at the same instruction): per-track long, 1 when a note started this block."
+
+[data.PARAMS_EFF]
+addr = 0x800062c0
+mk2 = 0x8000f7a8
+status = "verified"
+evidence = "The per-track effective parameter array the LFO modulates: lfo_block reads it as a3 + 4616 from 0x800050b8, and the interrupt rebuilds it at 0x401199c8 (lea 0x800062c0,%a0, MKII lea 0x8000f7a8 at 0x40120dea). 42 words per track, stride 0x54."
+
+[data.param_knob_draw_body]
+addr = 0x400a5884
+mk2 = 0x400a8584
+status = "verified"
+evidence = "param_knob_draw past lea %sp@(-24),%sp; moveml %d2-%d6/%a2,%sp@. DIFFERS from MKII: MK1 also reads the argument slots +16 (a flag byte) and +20 (a pointer) that MKII leaves alone; x/y/h sit at +24/+28/+32 in both, and its callback frame is (functor, value, x, y, h, flag) with flag = 1 unless the pointer's +24 is <= 8."
+
+[fn.lfo_dst_knob_draw]
+addr = 0x400f8e0a
+mk2 = 0x400ff9fc
+status = "verified"
+evidence = "Same body as MKII's (project -> track -> sound's destination list via vtable +0x4c, value >> 8, ROM record +0x30 short name, text draw). Reads the value at +8 and x/y/h at +12/+16/+20 only."
+
+[data.param_set_value_body]
+addr = 0x400a631e
+mk2 = 0x400a9008
+status = "verified"
+evidence = "param_set_value past lea %sp@(-40),%sp; moveml %d2-%d7/%a2,%sp@ (0x400a6316); same argument loads after."
+
+[data.param_set_read_body]
+addr = 0x400a611a
+mk2 = 0x400a8e02
+status = "verified"
+evidence = "param_set_read past lea %sp@(-16),%sp; moveml %d2/%a2/%fp,%sp@ (0x400a6112)."
+
+[fn.dest_list_build]
+addr = 0x400a752a
+mk2 = 0x400aa214
+status = "verified"
+evidence = "Identical builder; called by the list view constructor 0x4004a3cc at 0x4004a572 with (set, mask) and the vector at %fp@(-88)."
+
+[data.dest_list_build_resume]
+addr = 0x4004a578
+mk2 = 0x4004aecc
+status = "verified"
+evidence = "The addql #8,%sp after jsr dest_list_build in the list view constructor. The constructor matches MKII instruction for instruction: container index at %fp@(20) -> view +180, x at %fp@(36) -> +184, width %fp@(40) -> +188, mask at %fp@(32)."
+
+[data.list_same_resume]
+addr = 0x40039ae0
+mk2 = 0x40039d38
+status = "verified"
+evidence = "The picker's is-this-list-the-knob's test: after jsr param_container_index at 0x40039ada (lea %sp@(12),%sp; cmpl %d5,%d0)."
+
+[data.list_new_resume]
+addr = 0x40039b48
+mk2 = 0x40039da0
+status = "verified"
+evidence = "The picker creating a list: after jsr param_container_index at 0x40039b42 (andil #65536,%d7)."
+
+[data.knob_cidx_resume]
+addr = 0x4003a3d4
+mk2 = 0x4003a5f8
+status = "verified"
+evidence = "The page key handler's knob-event path: after jsr param_container_index at 0x4003a3ce; the result is stored to %fp@(-20) at 0x4003a3d8 and read by the release at 0x4003a7fa."
+
+[data.lfo_view_page_count]
+addr = 0x400c727a
+mk2 = 0x400cb02a
+status = "verified"
+evidence = "moveq #1,%d1 before movel #0x401af514,%d0 = {3}: the voice LFO view (among SAMP/FILT/AMP; the second {3} list at 0x400c743e follows DEL/REV/DIST/COMP and is the FX track's)."
+
+[data.lfo_view_page_list]
+addr = 0x400c7280
+mk2 = 0x400cb030
+status = "verified"
+evidence = "Operand of movel #0x401af514,%d0, the one-entry list {3}."

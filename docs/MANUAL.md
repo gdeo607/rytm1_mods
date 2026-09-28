@@ -4,22 +4,34 @@ What each mod in the MK1 build does on the device and how to use it. For buildin
 see `README.md`, for installing `docs/FLASHING.md`, and read `docs/HAZARDS.md`
 before flashing.
 
-The build is `AR1_OS1.73_0000_0002_0003_0008.syx`: stock MK1 OS 1.73 with the mods
-below; everything not mentioned behaves as stock. The unit still reports OS 1.73.
+There are two builds. Both are stock MK1 OS 1.73 plus the mods below; everything
+not mentioned behaves as stock, and the unit still reports OS 1.73.
+
+| build | mods |
+|---|---|
+| `AR1_OS1.73_0000_0002_0003_0008.syx` (SMP CUT) | 0002, 0003, 0008 |
+| `AR1_OS1.73_0000_0002_0003_0004.syx` (RANDOM) | 0002, 0003, 0004 |
+
+0004 and 0008 keep their settings in the same spare word of each sound, so they
+can't be in one build. Pick the one you need; switching is a normal OS update, and
+sounds keep their data - but the word is read by whichever mod is running, so a
+sound set up for one reads as (arbitrary) settings of the other. Reset them on the
+page when you switch.
 
 | mod | where | what |
 |---|---|---|
 | 0002 | TRIG > euclidean page, OP | euclid sets accents on your trigs instead of placing trigs |
 | 0003 | TRIG page, FUNC + VEL | per-track random velocity |
-| 0008 | FILTER key, pressed twice | SMP CUT page: low cut and high cut per track |
+| 0004 | LFO key, pressed twice (RANDOM build) | LFO RND page: two random modifiers per sound |
+| 0008 | FILTER key, pressed twice (SMP CUT build) | SMP CUT page: low cut and high cut per track |
 
 0000 is the shared code the others call into. It has no controls.
 
-Status on MK1: **built and verified in software, not yet run on an MK1.** 0002 and
-0003 were confirmed on an MKII by the author of the original project; 0008 is new; the
-MK1 port has been checked address by address against the MK1 image (PORTING.md),
-but only hardware can confirm it. The MKII mods 0004 (LFO RND) and 0006 (compressor
-preview) are not in this build yet - see PORTING.md.
+Status on MK1: **built and verified in software, not yet run on an MK1.** 0002,
+0003 and 0004 were confirmed on an MKII by the author of the original project; 0008
+is new; the MK1 port has been checked address by address against the MK1 image
+(PORTING.md), but only hardware can confirm it. The MKII compressor preview (0006)
+is not ported.
 
 MK1-specific: the MK1 draws the Bool Operator glyphs smaller (13 x 11 pixels
 instead of 17 x 12), and the accent versions are made from the MK1's own glyphs
@@ -74,7 +86,58 @@ it; the two are always built together.
 - Editing the amount may not mark the project as modified, so the device may
   not prompt you to save. Save explicitly.
 
-## 0008 - SMP CUT (low cut / high cut)
+## 0004 - LFO RND (RANDOM build)
+
+A second LFO page with two random modifiers per sound. On every note trig each
+modifier picks a random offset for its destination parameter and holds it until
+the next note. Unlike SMP CUT this changes the parameter values themselves, so it
+works on the analog side too: filter, decay, pitch, the machine's own parameters.
+
+**Use.** Press the LFO page key a second time for LFO RND; press it again to
+return to LFO.
+
+| knob | label | setting |
+|---|---|---|
+| A | DS1 | modifier 1 destination |
+| B | DS2 | modifier 2 destination |
+| E | DP1 | modifier 1 depth |
+| F | DP2 | modifier 2 depth |
+
+A destination knob shows the parameter's short name instead of a dial. Turning it
+opens the destination list, as LFO DST does, but on the left of the screen. Pick
+with the knob, confirm with YES. The list holds sixteen destinations:
+
+- the eight machine parameters (SRC page), which follow the machine
+- FIN, STA (sample)
+- FRQ, RES (filter)
+- DEC, PAN (amp)
+- DEL, REV (sends)
+
+A depth knob selects N from the same sixteen settings as 0003 (0 to 64). Each
+note trig offsets the destination by a random amount between -N and +N, clamped
+to the parameter's range. The offset is added on top of the parameter's value,
+p-locks, slides and LFO 1. Depth 0 is off.
+
+The four settings belong to the sound: they are meant to be saved with the kit and
+to travel with the sound through copy/paste and the sound pool (on MK1 not yet
+checked on hardware - the checklist asks). Sounds made before the mod read the
+first destination at depth 0.
+
+**Limitations**
+
+- Voice tracks only; the FX track has no LFO RND.
+- The four settings cannot be p-locked.
+- After the sequencer stops, the last offsets stay applied until the next note.
+  You may hear this on ringing notes and on pads.
+- Pads get no randomisation until the pattern has played at least once.
+- A step that plays a sound from the pool (sound lock) uses the kit sound's
+  settings.
+- A destination is stored as a machine slot. After a machine change it points at
+  the same slot on the new machine; where that slot is empty the knob reads `--`
+  and the empty slot does not appear in the list.
+- Edits may not mark the project as modified. Save explicitly.
+
+## 0008 - SMP CUT (low cut / high cut, SMP CUT build)
 
 A second FILTER page for cleaning up a mix: a low cut and a high cut on each
 track's **sample**.
@@ -120,5 +183,5 @@ or its level at 0) it acts on the whole sound.
   They live in the sound's one unused parameter slot; whether the MK1 saves that
   slot has to be tested on the unit.
 - Parameter locks are not supported for LCT/HCT.
-- It cannot be in the same build as the MKII project's LFO RND mod (0004): both use
-  that same slot.
+- It cannot be in the same build as LFO RND (0004): both use that same slot. That
+  is why there is a separate RANDOM build.

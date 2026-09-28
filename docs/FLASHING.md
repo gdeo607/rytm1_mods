@@ -30,13 +30,16 @@ Rytm's MIDI IN), not USB.
 1. `2_builds/AR1_OS1.73_control.syx` - optional, 2 minutes. Stock code, only
    repacked by our tool. If it boots and plays, the packer is proven on your unit,
    so any later problem is a mod, not the file format.
-2. `0_Latest_Custom_OS/AR1_OS1.73_0000_0002_0003.syx` - the mods. Then run through
-   the test list in 0_Latest_Custom_OS/README.txt.
+2. One of the two builds in `0_Latest_Custom_OS/` - `AR1_OS1.73_0000_0002_0003_0008.syx`
+   (SMP CUT) or `AR1_OS1.73_0000_0002_0003_0004.syx` (RANDOM). Then run through the
+   test list in 0_Latest_Custom_OS/README.txt. To switch between them, flash the other
+   one the same way; reset the SMP CUT / LFO RND settings of your sounds when you do,
+   because both builds read the same spare word of each sound.
 
 ## Downgrades
 
 The device does not support going back to an older OS ("Downgrade not possible").
-Both builds carry version 1.73, the same as stock 1.73, so returning to stock is a
+All builds carry version 1.73, the same as stock 1.73, so returning to stock is a
 same-version reinstall - the manufacturer allows reinstalling the current OS, but that has
 not been tried with these builds yet. The STARTUP-menu route above is the fallback
 either way.

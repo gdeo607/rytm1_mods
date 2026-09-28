@@ -16,3 +16,6 @@ build/comp/
 
 # the stock firmware is the manufacturer's file: supply your own, never commit it
 stock/*.syx
+
+# the container tool, fetched and patched by `make setup`
+vendor/
