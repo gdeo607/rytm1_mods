@@ -9,6 +9,24 @@ are the project, the `.syx` is an artifact.
 Unofficial. Not affiliated with or endorsed by the manufacturer. Flashing modified
 firmware is at your own risk; keep the stock `.syx` for recovery (docs/FLASHING.md).
 
+## What it looks like
+
+Two builds, one new page each (mockups at the MK1 screen's 122 x 32 pixels; the
+stock page code draws the real thing).
+
+**SMP CUT build** - press FILTER twice: a low cut and a high cut per track, on the
+sample layer.
+
+![SMP CUT page](docs/img/smp_cut_page.png)
+
+**RANDOM build** - press LFO twice: two random modifiers per sound. DS picks the
+destination, DP the depth; every note adds a random -N..+N to it.
+
+![LFO RND page](docs/img/lfo_rnd_page.png)
+
+Both builds also carry euclid accents (OP values OR\* XOR\* AND\* SUB\*) and velocity
+humanise (TRIG page, FUNC + VEL). Details in [docs/MANUAL.md](docs/MANUAL.md).
+
 ## Layout
 
 | path | what |

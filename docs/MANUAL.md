@@ -96,6 +96,8 @@ works on the analog side too: filter, decay, pitch, the machine's own parameters
 **Use.** Press the LFO page key a second time for LFO RND; press it again to
 return to LFO.
 
+![LFO RND page](img/lfo_rnd_page.png)
+
 | knob | label | setting |
 |---|---|---|
 | A | DS1 | modifier 1 destination |
@@ -141,6 +143,8 @@ first destination at depth 0.
 
 A second FILTER page for cleaning up a mix: a low cut and a high cut on each
 track's **sample**.
+
+![SMP CUT page](img/smp_cut_page.png)
 
 **Use.** Press FILTER, then FILTER again: the page is SMP CUT. Press FILTER again to
 go back.
