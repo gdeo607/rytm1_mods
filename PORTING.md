@@ -1,0 +1,148 @@
+# Porting the MKII mods to the Analog Rytm MK1
+
+Source: the peer project `3_Claude_work/rytm-mods_MKII_peer` (Analog Rytm MKII,
+OS 1.73). Target: Analog Rytm MK1, OS 1.73 (`1_official_firmware/Analog-Rytm_OS1.73.syx`,
+sha256 9115c388...157c).
+
+## Status
+
+| mod | MK1 status | notes |
+|---|---|---|
+| 0000 shared runtime | **built, verified in software** | 6 symbols, all found and checked |
+| 0002 euclid accents | **built, verified in software** | 31 symbols + 10 detours + 11 patches, all found; glyph code rewritten for the MK1's 13 x 11 icons |
+| 0003 velocity humanise | **built, verified in software** | 4 detours + 1 patch, all found |
+| 0004 LFO RND | not ported, disabled | see below |
+| 0006 compressor preview | not ported, disabled | not wanted |
+| 0008 SMP CUT (new) | **built, verified in software** | written for MK1; see below |
+
+"Verified in software" = `make verify` PASS, and every address checked against what
+the MKII notes say the code does (evidence per symbol in `re/symbols.toml`). Nothing
+has run on an MK1 yet.
+
+## Why the port works
+
+The MK1 and MKII 1.73 images are the same C++ code base, compiled separately. Code
+that contains no absolute address is byte-identical, shifted by a delta that is
+constant over long runs:
+
+| region (MKII) | delta to MK1 | anchored by |
+|---|---|---|
+| pattern load/save 0x40008xxx | -0x120 | 0002's two persistence detours (unique byte matches) |
+| param_apply_delta 0x400378xx | -0x1d2 | three detours |
+| trig_fire 0x4009xxxx | -0x1fec | four detours |
+| param text / get-set-by-id 0x400a8xxx | -0x2ce8 / -0x2cea | five detours, three jsr operands |
+| euclid block 0x400c0xxx..0x400c3xxx | -0x2f6c | three detours |
+| param_info / Bool Op glyphs 0x400ffxxx | -0x6e3e | the format and draw routines |
+
+Everything else - RAM addresses, string and table pointers, routines far from any
+anchor - was found by what references it (e.g. the icon set via its bitmap_set_make
+call, EUCLID_CHANGE_INFO from the stock setter) and checked against the MKII
+description. The per-symbol evidence is in `re/symbols.toml`.
+
+### Differences found (each would have been a silent bug)
+
+- MK1 container: one section. The bootstrap is embedded in MAIN OS and self-flashed
+  (docs/HAZARDS.md). The build and verify tools now guard that range.
+- Parameter info record: 88 B on MK1, 84 on MKII. Only 0002's (disabled) range probe
+  used the stride; it now reads PARAM_INFO_STRIDE.
+- Bool Operator glyphs: 13 x 11 on MK1, 17 x 12 on MKII. 0002 no longer carries its
+  own 17 x 12 pixel art; it builds the accent glyphs at run time from the MK1's own
+  (copy + 2 x 2 dot), so no stock artwork is carried in the mod.
+- Cave layout: MKII cave1 (1760 B) held 0002 + 0000. On MK1 the matching gap is only
+  1232 B and sits right after the embedded bootstrap, while MK1 cave2 is 2176 B. All
+  three mods now live in cave2 (2140 B used, 36 B spare).
+
+## 0008 SMP CUT - how it was placed
+
+A new mod, not a port, built on what the MKII project's LFO RND (0004) proved:
+a second page in a view's page list, dead parameter ids 1..2 renamed, and the
+sound's free word (index 0) for storage.
+
+v3 (optimised): no trig_fire hook any more. The audio side reads each voice's
+owning track's settings straight from its live sound every block, without calls:
+`*project_instance + 352 + 60 + 352*t` is the track's Sound, and Sound::get
+(vtable +0x28, 0x401737a2) is just `return this->+16` - read fresh each block,
+because Sound's setter can repoint it (e.g. on a kit load). The table is a1 + g
+per step (a2, a3 derived per block on the EMAC), the popup's frequencies are 21
+mantissas, both-on runs as one fused pass, and `diag = 1` builds a measuring
+version (DMA timer 0; FUNC + LCT shows the peak share of the interrupt).
+
+The audio side hooks the voice mixer `voice_out` (0x4010795e), which writes each
+physical voice's digital layer into the DAC ring: 8 words per frame, 32 frames per
+interrupt, slot `0x80000000 + (slot << 11)`, words 24-bit in bits 0..23. Both calls
+in the audio interrupt (0x401189e8, 0x40119d8a) are repointed through
+`voice_out_gate`, which runs the mixer and then filters those words in place, per
+voice, with the settings of the track in `voice_owner` (0x40254e2c).
+
+The filter math is modelled bit for bit in Python (fixed-point, the same Q31
+truncation as the EMAC) and matches an ideal Butterworth to within 0.3 dB for an octave
+either side of the cutoff, for cutoffs up to 2 kHz. Higher up, the slope beyond
+the cutoff gets steeper than the analog ideal (about 2 dB more at an octave past a
+5 kHz cutoff) - the usual digital (bilinear) cramping toward 24 kHz: more
+attenuation, never less. The -3 dB point is exact at every step. Full-scale square waves at both extremes stay
+bounded. The model is `tools/sim_cut.py` (needs numpy); the build itself checks that
+the table file is current (`tools/gen_cut_tables.py --check`).
+
+Space: code in `cave` (993 of 1232 B; the measuring build 1165), tables, state and
+helpers in `cave3` (982 of 1024 B). Both pools were promoted to "probably-verified" for this, on the static
+case in registry/allocations.toml; the first flash is their MK1 hardware run.
+
+Silence skip: a voice whose 32 input words are all zero and whose filter state is
+below 2048 is skipped and its state zeroed; in the model a 300 ms hit per second is
+filtered in about a third of the blocks, and the difference from filtering every
+block stays under -96 dBFS. The threshold is high because the integer filters park
+on a small DC value (up to ~1300) after a sound ends.
+
+To check on hardware: the page and knobs, that the sound changes as expected on a
+sample track, that the settings survive save + power cycle, and whether the UI
+stays responsive with many filters on.
+
+## What 0004 and 0006 still need
+
+**0004 LFO RND** (28 symbols, 14 detours, 18 patches, two RAM addresses in SRAM):
+- detours in the page/LFO code at MKII 0x40038462, 0x40039d32/d9a, 0x4003a5f2,
+  0x4003ab94, 0x4004aec6, 0x400a857c, 0x400a8dfa, 0x400a9000, 0x400ff574, 0x40120fae,
+  0x4009b000 - most sit in regions already anchored above;
+- 16 patches in the parameter-descriptor table (MKII 0x401bf9xx; MK1 table base
+  0x4018e004 found, its per-id layout still to confirm);
+- the audio-interrupt side: SRAM 0x8000e508 / 0x8000f7a8 on MKII, to be re-found;
+- space: 1.4 KB, which does not fit what is left. Needs MK1 twins of the MKII
+  dead-code pools (cave4..6) - or the loader route below, which removes the problem;
+- UI: the page is built from stock page machinery, but its knob art assumes the
+  MKII screen. Needs a look on a real MK1 screen.
+
+**0006 compressor preview**: the hardest by far. 3.8 KB, a model calibrated against
+the MKII's analog compressor path and USB audio, SRAM audio-engine addresses, and a
+128-column scrolling trace drawn for a 128 x 64 screen. On the MK1 (122-pixel-wide
+screen, different analog board) the drawing must be redesigned and the model
+re-calibrated with the MK1's own USB/Overbridge captures. Treat as a new mod that
+reuses the MKII design, not a port.
+
+**Much faster with the MKII stock file.** Everything above was located from the MKII
+project's notes and detour bytes alone. With `Analog-Rytm_MKII_OS1.73.syx`
+(the manufacturer's free download) in the folder, the two images can be matched function by
+function automatically, which turns 0004's ~60 addresses into a checked table.
+
+## Would a loader be feasible? Yes - two stages
+
+1. **Now:** this project's `tools/build.py --mods ...` already is a command-line
+   loader - pick mods, it checks conflicts and builds a verified `.syx`. A
+   double-click launcher (like the Digitakt's elekloader.app) around it is small work.
+2. **Properly: add the Rytm MK1 to elekloader** (the loader the Digitakt mods use).
+   Its DEVICES.md lists what a new device needs; for the MK1:
+   - device profile: sysex id 0x07, MAIN OS = section 3 at 0x40000400, ColdFire
+     (the ISA decoder already exists), no trailer - all known now;
+   - an ELE2 container writer (elekloader writes ELE3 today) - the format is simple
+     and the null-repack test above already pins what stock looks like;
+   - `stage` / `flash_at` / `flash_limit`: read out of the embedded bootstrap, which
+     is right here in MAIN OS;
+   - free RAM areas for mod code (DDR above .bss end 0x427a6310 and below the stack
+     at 0x48000000 is the place to look);
+   - a Rytm **core** mod: the hook bus (tick, draw, key, encoder, SETTINGS, audio
+     render). The Rytm runs the same framework as the Digitakt, so the
+     sites are findable; this is the largest piece;
+   - the mods rewritten as linkable `.elemod`s.
+
+   The payoff on the MK1 is bigger than on the Digitakt: the loader copies mod code
+   into free DDR at boot, so the cave shortage that blocks 0004 and 0006 disappears,
+   and mods combine with the Digitakt-style tooling you already use.

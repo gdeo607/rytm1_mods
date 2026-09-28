@@ -1,0 +1,485 @@
+# Single source of truth for every scarce resource a mod can claim - Analog Rytm MK1,
+# OS 1.73. Same rules as the MKII registry this was ported from
+# (3_Claude_work/rytm-mods_MKII_peer/registry/allocations.toml): tools/layout.py
+# asserts that no two claims overlap and that every claim sits inside its pool;
+# tools/build.py checks every `expect` against the stock bytes before patching.
+#
+# Every address below is an MK1 address. Each patch and detour also records the MKII
+# address it was ported from (mk2 = ...), and its `expect` bytes were matched in the
+# MK1 image - for the six-byte detours, the same bytes as on MKII.
+#
+# owner = the mod directory name, or "reserved:<reason>".
+
+[meta]
+target = "OS1.73"
+device = "Analog Rytm MK1"
+
+# ---------------------------------------------------------------- the image
+#
+# From the MK1 startup code (reset entry 0x40000592):
+#   0x40000506  copies 0x402a3000..0x402aa9f0 to SRAM 0x80000000..0x800079f0 and
+#               0x402aa9f0..0x402b1c24 (the image's end) to 0x80008000.
+#   0x4000055c  zeroes 0x402a3000..0x427a6310: __bss_start = 0x402a3000.
+# So, as on MKII, everything at or above 0x402a3000 is initialiser data and then .bss,
+# and NOTHING below 0x402a3000 is .bss.
+#
+# THE ONE MK1-ONLY TRAP: 0x4028c708..0x402a1b24 is the bootstrap, embedded in MAIN
+# OS. At every boot 0x400005aa compares its version word (0x4028c708) with the one in
+# flash (0x1fff8) and, if it is newer, 0x4011a738 erases the bootstrap sectors and
+# writes 0x4028c710..0x402a1b24 into them. A mod byte in that range could one day be
+# written into the recovery path. No pool may touch it, and tools/verify.py asserts
+# its hash is stock in every build.
+
+# ---------------------------------------------------------------------- pools
+
+[[pool]]
+name   = "cave2"
+start  = 0x402a2780
+end    = 0x402a3000          # exclusive; 2176 B
+status = "probably-verified"
+note   = """
+The MK1 twin of MKII's cave2, which ran 0003 and 0004 on hardware: alignment
+padding between the end of the read-only data and the first SRAM load image.
+
+Evidence, all static, on this image:
+- 0x402a277c..0x402a3000 is zeros (the run continues into the SRAM image, whose
+  first bytes are zero too). The pool starts 4 bytes in to keep claims aligned.
+- Just below is the C++ static-constructor table: count 130 at 0x402a2570, entries
+  from 0x402a2574, so it ends exactly at 0x402a277c. (MKII: 146 entries.)
+- No 32-bit word at any even offset in the image points into 0x402a2700..0x402a3000.
+- 0x402a3000 is where both the SRAM copy (0x40000506) and the .bss clear
+  (0x4000055c) start; the gap is below both and nothing else writes it.
+
+Why "probably-verified" and not "candidate" before any MK1 hardware run: the static
+case is complete, not an argument. The two ways a zero run can be live are closed by
+the startup code itself - it is below __bss_start, so nothing clears or reuses it,
+and it is above the last static constructor, so nothing reads it as a table - and
+nothing in the image points into it. It is also the exact twin of MKII's cave2,
+which ran 0003 and 0004 through normal use with a canary that stayed intact.
+What is NOT yet done is an MK1 session: the first 0002/0003 image is that run
+(code here that got overwritten would crash visibly, not fail quietly). Record the
+result here and change the status to "verified" after it.
+"""
+
+[[pool]]
+name   = "cave"
+start  = 0x402a1b30
+end    = 0x402a2000          # exclusive; 1232 B
+status = "probably-verified"
+note   = """
+The MK1 twin of MKII's cave1 (padding at the end of the code, before the UTF-16 USB
+strings). On MK1 what ends just before it is the EMBEDDED BOOTSTRAP IMAGE, whose last
+byte is 0x402a1b23 (the flasher's loop bound, cmpil #0x402a1b24 at 0x4011a81e).
+
+Evidence: 0x402a1b24..0x402a2002 is zeros; the only references into
+0x402a1b00..0x402a2010 are that loop bound and two pointers to the string table at
+0x402a2000. The pool keeps 12 bytes clear of the image's end on purpose.
+
+Promoted to "probably-verified" on the same static case as cave2 (2026-09-27, for
+0008): below __bss_start, so nothing clears or reuses it at run time; nothing points
+into it; and it is outside the bootstrap flasher's range, whose end is the exclusive
+bound 0x402a1b24 - the embedded image's own hash is checked by build and verify, so
+a claim here that spilled into the image could not be built. The MKII twin (cave1)
+was proven on hardware. Not yet run on an MK1: 0008's first flash is that run.
+"""
+
+[[pool]]
+name   = "cave3"
+start  = 0x4024db0c
+end    = 0x4024df0c          # exclusive; 1024 B
+status = "probably-verified"
+note   = """
+The MK1 twin of MKII's cave3 (0x40289ab8, 1024 B between two float tables, which ran
+0003 on MKII hardware). Same shape here: 1024 B of zeros, bounded by referenced
+table starts - the nearest references are 0x4024d508 below and 0x4024df0c (the next
+table's start) above; nothing points inside. The same residual doubt as on MKII:
+the table before it starts at 0x4024d508, so if that table ran on for 1540 B and
+simply decayed to zero, the run would be live data that reads as 0.
+
+The residual doubt is closed on MK1 (2026-09-27): the table before the run is 385
+words starting at 0x4024d508 whose LAST word, 0x4024db08, is 0x48908ad9 (about 0.57
+in Q31) - a table that ends on a large value, not one decaying into the run. So the
+run is padding. Promoted to "probably-verified" with cave2's static argument (below
+__bss_start, unreferenced) plus the MKII twin's hardware canary. It is written at
+run time by 0008 (filter state), so if it were live data the filter would misbehave
+audibly rather than silently.
+"""
+
+# Not yet ported: MKII's dead-code pools cave4..cave6 (whole unreachable routines),
+# which 0004 and 0006 need. Their MK1 twins have to be found and re-proven.
+
+
+# --------------------------------------------------------------------- claims
+#
+# Everything for 0000/0002/0003 sits in cave2, the pool with the strongest static
+# case, in the order 0002, 0000, 0003. On MKII 0002 and 0000 lived in cave1 and
+# 0003 in cave2; on MK1 cave1 is smaller (it ends the embedded bootstrap image)
+# and cave2 is larger, and the three fit in cave2 alone with room to spare.
+
+[[cave]]
+owner = "0002-euclid-accents"
+addr  = 0x402a2780
+size  = 0x5b8
+note  = "Composite Bool Operator accessors, the eight-entry label table and four new label strings, the accent playback and bake, the euclid-byte persistence and mask, and the run-time-built accent glyphs (13 x 11 on MK1). MKII: 0x402cc920 in cave1."
+
+[[cave]]
+owner = "0000-shared"
+addr  = 0x402a2d38
+size  = 0xec
+note  = "The shared runtime: amount and dial-stop tables, decimal formatter, LCG draw, sound plumbing, FUNC test. MKII: 0x402ccebc in cave1."
+
+[[cave]]
+owner = "0003-velocity-humanise"
+addr  = 0x402a2e24
+size  = 0x1b8
+gate  = "!diag_canary"
+note  = "The velocity stub, the FUNC+VEL amount gate, the VEL get-by-id hook and amount text, the change marker, the RND label gate, the LCG state and the RND string. MKII: 0x402cdddc in cave2."
+
+
+[[patch]]
+owner       = "0002-euclid-accents"
+addr        = 0x400a5b66
+size        = 4
+expect      = "400be244"
+from_symbol = "boolop_get_ui"
+mk2         = 0x400a884e
+
+[[patch]]
+owner       = "0002-euclid-accents"
+addr        = 0x400a6fc2
+size        = 4
+expect      = "400be274"
+from_symbol = "boolop_set_ui"
+mk2         = 0x400a9cac
+
+[[patch]]
+owner       = "0002-euclid-accents"
+addr        = 0x400f8638
+size        = 2
+expect      = "7203"
+replace     = "7207"
+mk2         = 0x400ff476
+
+[[patch]]
+owner       = "0002-euclid-accents"
+addr        = 0x400f8654
+size        = 2
+expect      = "7003"
+replace     = "7007"
+mk2         = 0x400ff492
+
+[[patch]]
+owner       = "0002-euclid-accents"
+addr        = 0x4011cbe4
+size        = 4
+expect      = "40186632"
+from_symbol = "bitmapset8"
+mk2         = 0x40143126
+
+[[patch]]
+owner       = "0002-euclid-accents"
+addr        = 0x400f85a2
+size        = 2
+expect      = "7203"
+replace     = "7207"
+mk2         = 0x400ff3e0
+
+[[patch]]
+owner       = "0002-euclid-accents"
+addr        = 0x400f85ac
+size        = 2
+expect      = "7003"
+replace     = "7007"
+mk2         = 0x400ff3ea
+
+[[patch]]
+owner       = "0002-euclid-accents"
+addr        = 0x400f85b8
+size        = 4
+expect      = "401b96d0"
+from_symbol = "boolop_labels"
+mk2         = 0x400ff3f6
+
+[[patch]]
+owner       = "0003-velocity-humanise"
+addr        = 0x400a5ad0
+size        = 4
+expect      = "400bcdb4"
+from_symbol = "vel_get_ui"
+mk2         = 0x400a87b8
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x40098b86
+size        = 6
+expect      = "75f208006014"
+entry       = "trig_fire_accent"
+rejoin      = 0x40098ba0
+reemit      = false
+mk2         = 0x4009ab72
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x400c0ca2
+size        = 6
+expect      = "4fefff8848d77cfc"
+entry       = "euclid_bake_gate"
+mk2         = 0x400c3c0e
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x400bde96
+size        = 6
+expect      = "2f0a246f0008"
+entry       = "euclid_enabled_get_masked"
+rejoin      = "none"
+reemit      = false
+mk2         = 0x400c0e02
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x400bdec6
+size        = 6
+expect      = "598f2f0e2f0a"
+entry       = "euclid_enabled_set_keep"
+rejoin      = "none"
+reemit      = false
+mk2         = 0x400c0e32
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x400f8718
+size        = 6
+expect      = "222f00040c81000001d5"
+entry       = "param_info_probe"
+gate        = "probe_range"
+mk2         = 0x400ff556
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x400376d4
+size        = 6
+expect      = "4feffff448d7040c"
+entry       = "param_delta_gate"
+mk2         = 0x400378a6
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x400a58f8
+size        = 6
+expect      = "4fefffec48d70c1c"
+entry       = "boolop_text_gate"
+mk2         = 0x400a85e0
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x40008e42
+size        = 6
+expect      = "712a02caef88"
+entry       = "pattern_save_accent"
+mk2         = 0x40008f62
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x40008ba4
+size        = 6
+expect      = "d08091804480"
+entry       = "pattern_load_accent"
+mk2         = 0x40008cc4
+
+[[detour]]
+owner       = "0002-euclid-accents"
+addr        = 0x40098ade
+size        = 6
+expect      = "102802ca43f37a00"
+entry       = "trig_fire_euclid_masked"
+mk2         = 0x4009aaca
+
+[[detour]]
+owner       = "0003-velocity-humanise"
+addr        = 0x40098fb4
+size        = 6
+expect      = "202f003cd7ca"
+entry       = "vel_humanise"
+mk2         = 0x4009afa0
+
+[[detour]]
+owner       = "0003-velocity-humanise"
+addr        = 0x400376dc
+size        = 6
+expect      = "246f0010262f001c"
+entry       = "vel_amount_gate"
+mk2         = 0x400378ae
+
+[[detour]]
+owner       = "0003-velocity-humanise"
+addr        = 0x400a5900
+size        = 6
+expect      = "282f001c266f0018"
+entry       = "vel_text_gate"
+mk2         = 0x400a85e8
+
+[[detour]]
+owner       = "0003-velocity-humanise"
+addr        = 0x400a62ae
+size        = 6
+expect      = "0c81000001d5"
+entry       = "vel_label_gate"
+mk2         = 0x400a8f98
+
+# ------------------------------------------------------- 0008-sample-cut
+#
+# Code, page data, strings and the per-track settings in `cave`; the cutoff tables
+# and the filter state in `cave3`.
+
+[[cave]]
+owner   = "0008-sample-cut"
+addr    = 0x402a1b30
+size    = 0x4d0
+section = ".text"
+note    = "The page_info / get / delta / text gates, the voice-output hook, cut_process and its two filter loops, the FILTER view's page list and the SMP CUT descriptor, and the strings."
+
+[[cave]]
+owner   = "0008-sample-cut"
+addr    = 0x4024db0c
+size    = 0x400
+section = ".tab"
+note    = "The 64-step table (a1 and g, 512 B), the popup's 21 frequency mantissas (42 B), 8 voices x 16 B of filter state written by the audio interrupt, and helpers (word_sync, value_of, put_u3, coefs). The measuring build adds two counters."
+
+# The FILTER view's page list: {5} becomes {5, 11}. Pressing FILTER again then
+# cycles to page 11 through the view's own multi-page handling.
+[[patch]]
+owner   = "0008-sample-cut"
+addr    = 0x400c71d2
+size    = 2
+expect  = "7201"           # moveq #1,%d1 - page count
+replace = "7202"
+
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x400c71d8
+size        = 4
+expect      = "401af51c"   # the one-entry list holding page 5
+from_symbol = "cut_pages"
+
+# page_info answers page 11 from the cave; every other id goes to stock.
+[[detour]]
+owner  = "0008-sample-cut"
+addr   = 0x400f8736
+size   = 6
+expect = "720a202f0004"      # moveq #10,%d1; movel %sp@(4),%d0
+entry  = "page_info_gate"
+
+# The dials: page_get_value's entry, for ids 1..2.
+[[detour]]
+owner  = "0008-sample-cut"
+addr   = 0x400381a0
+size   = 6
+expect = "4feffff448d7040c"
+entry  = "get_gate"
+
+# The knobs: param_apply_delta past its prologue, where 0003's gate rejoins.
+[[detour]]
+owner  = "0008-sample-cut"
+addr   = 0x400376e4
+size   = 6
+expect = "77832f2a0074"
+entry  = "delta_gate"
+
+# The popup text: param_value_text past its argument loads, where 0003's gate rejoins.
+[[detour]]
+owner  = "0008-sample-cut"
+addr   = 0x400a5908
+size   = 6
+expect = "242f0020262f0024"
+entry  = "text_gate"
+
+# The two calls to the voice mixer in the audio interrupt now go through the filter.
+# Only each jsr's 4-byte target changes.
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x401189ea
+size        = 4
+expect      = "4010795e"   # jsr voice_out, short path
+from_symbol = "voice_out_gate"
+
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x40119d8c
+size        = 4
+expect      = "4010795e"   # jsr voice_out, main path
+from_symbol = "voice_out_gate"
+
+# Parameter ids 1 and 2, dead Error records, become LCT and HCT: container index 0
+# (the sound's free word), range 0..0x7f00, and new names.
+
+[[patch]]
+owner   = "0008-sample-cut"
+addr    = 0x4018e03c
+size    = 4
+expect  = "ffffffff"       # id 1: container index
+replace = "00000000"
+
+[[patch]]
+owner   = "0008-sample-cut"
+addr    = 0x4018e044
+size    = 4
+expect  = "00000000"       # id 1: max
+replace = "00007f00"
+
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x4018e060
+size        = 4
+expect      = "40208914"   # id 1: long name, was "Error"
+from_symbol = "str_lc_l"
+
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x4018e064
+size        = 4
+expect      = "40208b80"   # id 1: group name, was ""
+from_symbol = "str_group"
+
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x4018e068
+size        = 4
+expect      = "401ff21d"   # id 1: short name, was "ERR"
+from_symbol = "str_lc"
+
+[[patch]]
+owner   = "0008-sample-cut"
+addr    = 0x4018e070
+size    = 4
+expect  = "ffffffff"       # id 2: container index
+replace = "00000000"
+
+[[patch]]
+owner   = "0008-sample-cut"
+addr    = 0x4018e078
+size    = 4
+expect  = "00000000"       # id 2: max
+replace = "00007f00"
+
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x4018e094
+size        = 4
+expect      = "40208914"   # id 2: long name, was "Error"
+from_symbol = "str_hc_l"
+
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x4018e098
+size        = 4
+expect      = "40208b80"   # id 2: group name, was ""
+from_symbol = "str_group"
+
+[[patch]]
+owner       = "0008-sample-cut"
+addr        = 0x4018e09c
+size        = 4
+expect      = "401ff21d"   # id 2: short name, was "ERR"
+from_symbol = "str_hc"
+

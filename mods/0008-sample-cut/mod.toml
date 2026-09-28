@@ -1,0 +1,47 @@
+[mod]
+id      = "0008-sample-cut"
+title   = "SMP CUT: a second FILTER page with a low cut and a high cut per track"
+
+enabled = true
+
+# re-only | built | hardware-verified | retracted
+status  = "built"
+
+# Both keep their settings in the sound's one free parameter word (sound index 0),
+# so they can never be in one image.
+excludes = ["0004-lfo-rnd"]
+
+summary = """
+Press FILTER a second time for the SMP CUT page: LCT (low cut) and HCT (high cut),
+per track, saved with the sound. Each is a 12 dB/octave Butterworth filter, 20 Hz to
+20 kHz in 64 steps; LCT 0 and HCT 127 are off.
+
+They act on the track's DIGITAL layer - the sample, and the digital noise some
+machines use - which the Rytm generates in software and sends through a DAC into
+the voice's analog path, before the analog filter. The analog synthesis part of a
+machine is not affected: nothing in firmware can filter it.
+
+The filtering runs in the audio interrupt, per physical voice, on the words the
+stock voice mixer (0x4010795e) has just written to the DAC ring, using the settings
+of the track that currently owns the voice - read from that track's live sound
+every block with plain memory reads (project -> kit -> Sound -> live sound), so
+kit loads and edits apply at once. Both filters on run as one fused pass. A voice with both filters off costs
+nothing, and neither does a silent one: when a voice's 32 words are all zero and its
+filter state has settled below 2048 (-96 dBFS), the state is zeroed and the voice
+skipped. While a voice sounds, each filter switched on costs, by instruction count,
+roughly 1% of the audio interrupt's time (not yet measured on hardware); all 16
+sounding at once would be about 15%, the range where the MKII project saw the UI
+queue back up.
+"""
+
+[sources]
+stub = "stub.s"
+
+[params]
+# 1 = the measuring build: FUNC + turning LCT shows, in its popup, the filters'
+# peak share of the audio interrupt since the last reading ("2.4%"), timed with
+# DMA timer 0. Keep at 0 to ship.
+diag = 0
+
+[requires]
+shared = true
