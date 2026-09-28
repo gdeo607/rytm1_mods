@@ -105,7 +105,7 @@ matched every MKII address the mod uses to its MK1 twin by voting over normalise
 instruction windows; each result was then read side by side, and an independent
 review pass re-checked every site, expect string, frame offset and RAM address.
 
-- 12 detours (MKII had 14 - see the title hook below), 24 patches, 22 symbols;
+- 13 detours (MKII had 14 - see the title hook below), 24 patches, 22 symbols;
   all in `re/symbols.toml` with the MKII address and the evidence.
 - The 469 ROM parameter records are identical on both (kind, container index,
   range, modflags, names), so the sixteen destinations and ids 1..4 carry over.

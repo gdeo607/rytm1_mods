@@ -35,7 +35,7 @@ humanise (TRIG page, FUNC + VEL). Details in [docs/MANUAL.md](docs/MANUAL.md).
 | `re/symbols.toml` | the MK1 symbol map: every address, the MKII address it ports, and the evidence |
 | `registry/allocations.toml` | cave pools and every claim on them, detour and patch sites (MK1 addresses) |
 | `mods/NNNN-slug/` | one modification: manifest, stub source, design notes |
-| `tools/` | build, layout check, verify, symbol generation; `xmatch.py` (MKII -> MK1 address matcher); `gen_cut_tables.py` (0008's filter tables); `eft-ele2-align4.patch` |
+| `tools/` | build, layout check, verify, symbol generation; `xmatch.py` (MKII -> MK1 address matcher); `mkelemod.py` / `elemod_check.py` (the elekloader export and its proof); `gen_cut_tables.py` (0008's filter tables); `eft-ele2-align4.patch` |
 | `vendor/` | elektron-firmware-tool, fetched and patched by `make setup` |
 | `docs/` | MANUAL (what the mods do), FLASHING, HAZARDS (read it) |
 | `PORTING.md` | what is ported, how, what differs from MKII, what is left, the loader question |
@@ -60,6 +60,28 @@ OS saves, loads, copies and undoes by itself - so they can never share an image.
 A subset, for bisecting on hardware:
 
     python3 tools/build.py --mods 0000-shared 0002-euclid-accents
+
+## Choosing mods in elekloader
+
+The same workflow as the Digitakt mods: `make elemod` writes one `.elemod` per mod
+to `build/elemod/`, and elekloader (with its Analog Rytm mk1 profile) lets you tick
+the ones you want, checks them against each other, builds the `.syx` on your stock
+file and verifies it. The mods are patch sets at fixed addresses (format 1, no
+boot-time loader), so a combination is exactly what `tools/build.py --mods ...`
+would build - `make elemod-check ELEKLOADER=path/to/elekloader` proves it for every
+combination, and that elekloader refuses 0004 + 0008 and any mod without what it
+needs.
+
+| mod | needs | cannot go with |
+|---|---|---|
+| 0000 Shared runtime | - | - |
+| 0002 Euclid accents | - | - |
+| 0003 Velocity humanise | 0000, 0002 | - |
+| 0004 LFO RND | 0000 | 0008 |
+| 0008 SMP CUT | 0000 | 0004 |
+
+elekloader packs the MAIN OS with its own packer, so its `.syx` is ~15% larger than
+the one `make` writes (the MAIN OS inside is identical).
 
 ## The MK1 container
 

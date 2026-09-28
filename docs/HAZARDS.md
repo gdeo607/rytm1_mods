@@ -76,6 +76,18 @@ The MK1 and MKII firmware are one code base, and most routines are byte-identica
   past exactly what it displaced
 - no stub's movem overruns its stack frame
 
+## Builds from elekloader
+
+elekloader writes the same MAIN OS as `make` (proved per combination by
+`make elemod-check`), but packs it with its own packer: the container is ~9% larger
+than stock (1.41 MB against 1.29 MB; flash ends at about 0x178000 instead of
+0x15a2c4). The MK1 bootstrap unpacks it with a routine byte-identical to the
+Digitakt mk1's, which runs elekloader builds; its upgrade erases only the 64 KB
+sectors the file needs from 0x20000. elekloader keeps every mod out of the embedded
+bootstrap copy and refuses any output that changes it. What is not yet known is
+whether the in-OS (USB/Transfer) upgrade accepts the larger file - if it refuses,
+the bootstrap route (FUNC at power-on, TRIG 4, DIN MIDI) takes it.
+
 ## Status means what it says
 
 `built` means the image assembled. Only `hardware-verified` counts, and only for the

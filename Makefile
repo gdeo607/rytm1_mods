@@ -2,7 +2,7 @@
 # Build and verify use only the Python standard library; python3 >= 3.11.
 PY := python3
 
-.PHONY: all setup symbols layout build verify random control disasm clean
+.PHONY: all setup symbols layout build verify random elemod elemod-check control disasm clean
 
 all: verify
 
@@ -41,6 +41,16 @@ RANDOM_MODS := 0000-shared 0002-euclid-accents 0003-velocity-humanise 0004-lfo-r
 random: symbols layout
 	$(PY) tools/build.py --mods $(RANDOM_MODS) --tag 0000_0002_0003_0004
 	$(PY) tools/verify.py --tag 0000_0002_0003_0004
+
+# The mods as elekloader .elemod files (build/elemod/), one per mod, from the two
+# verified builds. elemod-check proves that elekloader, given them, builds the same
+# MAIN OS as build.py for every valid combination (and refuses every invalid one);
+# ELEKLOADER= points at an elekloader checkout with the Analog Rytm mk1 profile.
+ELEKLOADER ?= ../elekloader
+elemod:
+	$(PY) tools/mkelemod.py
+elemod-check: elemod
+	$(PY) tools/elemod_check.py --elekloader $(ELEKLOADER) --full
 
 # The pipeline test: no mods at all, stock MAIN OS recompressed by our tool.
 control: symbols layout
